@@ -1,0 +1,10 @@
+name = "haven-salon-api"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[[kv_namespaces]]
+binding = "HAVEN_KV"
+id = "501843707e734d4489bfb49e942a9423"
+
+# Set your admin password as a secret:
+# wrangler secret put ADMIN_PASSWORD
