@@ -14,9 +14,7 @@ import GaleriePage from './pages/GaleriePage'
 import FAQPage from './pages/FAQPage'
 import NotFoundPage from './pages/NotFoundPage'
 import WhatsAppButton from './components/WhatsAppButton'
-import TopBanner from './components/TopBanner'
 import CookieConsent from './components/CookieConsent'
-import OpeningConfetti from './components/OpeningConfetti'
 import './App.css'
 
 function ScrollReveal() {
@@ -45,9 +43,7 @@ function SiteContent() {
 
   return (
     <>
-      {location.pathname === '/' && <TopBanner />}
       <ScrollReveal />
-      <OpeningConfetti />
       <Navbar />
       <main key={location.pathname} className="page-fade">
         <Routes>
