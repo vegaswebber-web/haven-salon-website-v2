@@ -31,8 +31,11 @@ async function writeLog(env, type, data) {
 }
 
 // ─── Welcome mail ─────────────────────────────────────────────────────────────
+// Geeft { ok: true } of { ok: false, error } terug, zodat fouten zichtbaar worden.
 async function sendWelcomeEmail(naam, email, env) {
-  if (!env.RESEND_API_KEY) return
+  if (!env.RESEND_API_KEY) {
+    return { ok: false, error: 'RESEND_API_KEY is niet ingesteld (wrangler secret put RESEND_API_KEY)' }
+  }
   const html = `
     <!DOCTYPE html><html lang="nl"><head><meta charset="UTF-8"><style>
       body{font-family:Georgia,serif;background:#0f0f0f;color:#c8c2bc;margin:0;padding:0}
@@ -59,11 +62,20 @@ async function sendWelcomeEmail(naam, email, env) {
       </div>
     </div></body></html>
   `
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: 'Haven Salon <info@havensalon.nl>', to: [email], subject: `Welkom bij Haven Salon, ${naam}!`, html }),
-  }).catch(() => {})
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: 'Haven Salon <info@havensalon.nl>', to: [email], subject: `Welkom bij Haven Salon, ${naam}!`, html }),
+    })
+    if (!res.ok) {
+      const body = await res.text()
+      return { ok: false, error: `Resend HTTP ${res.status}: ${body.slice(0, 300)}` }
+    }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: `Resend niet bereikbaar: ${err.message}` }
+  }
 }
 
 // ─── Admin panel HTML ─────────────────────────────────────────────────────────
@@ -114,6 +126,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
   .log-booking{background:rgba(180,100,255,.12);color:#c57fff;border:1px solid rgba(180,100,255,.25)}
   .log-contact{background:rgba(255,180,50,.12);color:#ffc060;border:1px solid rgba(255,180,50,.25)}
   .log-admin{background:rgba(224,112,112,.12);color:#e07070;border:1px solid rgba(224,112,112,.3)}
+  .log-mail_error{background:rgba(224,60,60,.2);color:#ff8080;border:1px solid rgba(224,60,60,.5)}
   /* Login */
   #login{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
   .login-box{width:100%;max-width:360px;background:var(--bg2);border:1px solid var(--border);padding:48px 36px;text-align:center}
@@ -198,6 +211,7 @@ const ADMIN_HTML = `<!DOCTYPE html>
         <button class="btn btn-sm" onclick="filterLogs('otp')">OTP</button>
         <button class="btn btn-sm" onclick="filterLogs('booking')">Afspraken</button>
         <button class="btn btn-sm" onclick="filterLogs('contact')">Contact</button>
+        <button class="btn btn-sm btn-danger" onclick="filterLogs('mail_error')">Mail fouten</button>
       </div>
       <div id="logs-list"><div class="empty">Laden…</div></div>
     </div>
@@ -412,9 +426,16 @@ export default {
           registeredAt: new Date().toISOString(),
         }))
         await writeLog(env, 'register', { naam, email: email.toLowerCase() })
-        await sendWelcomeEmail(naam, email, env)
-        return json({ success: true })
-      } catch { return json({ error: 'Invalid request' }, 400) }
+        const mail = await sendWelcomeEmail(naam, email, env)
+        if (!mail.ok) {
+          console.error('[welcome-mail]', mail.error)
+          await writeLog(env, 'mail_error', { naam, email: email.toLowerCase(), details: mail.error })
+        }
+        return json({ success: true, emailSent: mail.ok, ...(mail.ok ? {} : { emailError: mail.error }) })
+      } catch (err) {
+        console.error('[register]', err)
+        return json({ error: 'Invalid request', details: err.message }, 400)
+      }
     }
 
     // ── POST /api/login ──
