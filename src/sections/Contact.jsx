@@ -11,6 +11,7 @@ export default function Contact() {
     bericht:  '',
   })
   const [status, setStatus] = useState('idle')
+  const [errorMsg, setErrorMsg] = useState('')
 
   function handleChange(e) {
     setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -19,12 +20,30 @@ export default function Contact() {
   async function handleSubmit(e) {
     e.preventDefault()
     const datum = new Date().toLocaleString('nl-NL')
-    fetch(`${_OW}/send-contact`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, datum }),
-    }).catch(() => {})
-    setStatus('success')
+    setStatus('sending')
+    setErrorMsg('')
+    try {
+      const res = await fetch(`${_OW}/send-contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, datum }),
+      })
+      if (!res.ok) {
+        let detail = ''
+        try {
+          const data = await res.clone().json()
+          detail = data.error || data.message || ''
+        } catch {
+          detail = (await res.text()).slice(0, 200)
+        }
+        throw new Error(`HTTP ${res.status}${detail ? ` – ${detail}` : ''}`)
+      }
+      setStatus('success')
+    } catch (err) {
+      console.error('[Contact] Versturen mislukt:', err)
+      setErrorMsg(err.message || 'Onbekende fout')
+      setStatus('error')
+    }
   }
 
   return (
@@ -127,8 +146,13 @@ export default function Contact() {
                   <label htmlFor="bericht">Gewenste dienst / bericht *</label>
                   <textarea id="bericht" name="bericht" value={form.bericht} onChange={handleChange} required placeholder="Bijv: knippen + baard, zaterdag ochtend" rows={5} />
                 </div>
-                <button type="submit" className="btn-primary">
-                  Verstuur aanvraag
+                {status === 'error' && (
+                  <p className="form-error" role="alert">
+                    Versturen is mislukt ({errorMsg}). Probeer het opnieuw of bel ons op +31 299 235 355.
+                  </p>
+                )}
+                <button type="submit" className="btn-primary" disabled={status === 'sending'}>
+                  {status === 'sending' ? 'Versturen…' : 'Verstuur aanvraag'}
                 </button>
               </form>
             )}
